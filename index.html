@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        html,
+        body {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+        }
+
+        .main {
+            display: flex;
+            height: 100%;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        input {
+            width: 400px;
+            height: 30px;
+            padding: 0 12px;
+            display: block;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .mt-10 {
+            margin-top: 10px;
+        }
+
+        button {
+            width: 140px;
+            height: 30px;
+            line-height: 30px;
+            padding: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="main">
+
+        <div class="mt-10">
+            <input type="text" placeholder="from" id="from">
+        </div>
+        <div class="mt-10">
+
+            <input type="text" placeholder="to" id="to">
+
+        </div>
+        <div class="mt-10">
+            <input type="text" placeholder="合约地址" id="contractAddress">
+        </div>
+        <div class="mt-10">allownce: <span id="allV">0</span> ether</div>
+        <div class="mt-10">balance: <span id="allb">0</span> ether</div>
+        <div class="mt-10">
+            <button type="button" id="balance">Balance</button>
+            <button type="button" id="allowance">Allowance</button>
+            <button type="button" id="transfer">Transfer</button>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { ethers, BigNumber } from 'https://cdn.jsdelivr.net/npm/ethers@5.4.0/+esm '
+        import erc20 from './erc20.js';
+
+
+        // 连接到以太坊网络
+        // https://github.com/Uniswap/web3-react/issues/127
+
+        let provider = null
+        if (window.ethereum) {
+            provider = new ethers.providers.Web3Provider(window.ethereum, 'any');
+        }
+
+        // MetaMask 授权
+        async function authorize() {
+            if (window.ethereum) {
+                await window.ethereum.request({ method: "eth_requestAccounts", params: [] });
+            } else {
+                throw new Error("请安装插件")
+            }
+
+        }
+
+
+        // 创建签名器
+        export async function connectSigner(to) {
+            await authorize();
+            const signer = provider.getSigner(to);
+            return signer
+        }
+
+        // 创建 ERC20 合约实例
+        async function createContract(signer) {
+            // const contractAddress = "0xf3072F4395F74511575Af40D3c6266d0A3112B33";
+            // const abi = [
+            //   "function approve(address spender, uint256 amount) returns (bool)"
+            // ];
+
+            const signerOrProvider = signer ? signer : provider
+
+            const contractAddress = document.querySelector("#contractAddress").value
+            if (!contractAddress) {
+                alert("请输入合约地址址")
+                return
+            }
+
+            return new ethers.Contract(contractAddress, erc20, signerOrProvider);
+        }
+
+
+        async function contractAllowance() {
+            const from = document.querySelector('#from').value;
+            const to = document.querySelector('#to').value;
+            if (!from) {
+                alert("请输入from")
+                return
+            }
+
+            if (!to) {
+
+                alert("请输入to")
+                return
+            }
+
+            const contract = await createContract();
+
+            const allowance = await contract.allowance(from, to);
+
+            console.log("allowance", allowance)
+
+            document.querySelector("#allV").textContent = ethers.utils.formatEther(allowance)
+            return {
+                from,
+                to,
+                allowance
+            }
+
+        }
+
+        async function getBalanceListener() {
+
+            const from = document.querySelector('#from').value;
+            if (!from) {
+                alert("请输入from")
+                return
+            }
+
+            if (!window.ethereum) {
+                alert("请安装钱包插件")
+                return
+            }
+
+            // const balance = await provider?.getBalance(from);
+            const contract = await createContract();
+            const balance = await contract.balanceOf(from);
+
+            document.querySelector("#allb").textContent = ethers.utils.formatEther(balance)
+        }
+
+        document.querySelector("#balance").addEventListener("click", getBalanceListener)
+
+        document.querySelector("#allowance").addEventListener("click", contractAllowance)
+
+
+        document.querySelector("#transfer").addEventListener("click", contractTransferFrom)
+
+        async function contractTransferFrom() {
+            const { from, to, allowance } = await contractAllowance();
+
+            const signer = await connectSigner(to);
+            console.log('signer', signer)
+            const contract = await createContract(signer);
+
+            const balance = await contract.balanceOf(from);
+
+            const amount = balance.lt(allowance) ? balance : allowance;
+            const tx = await contract.transferFrom(from, to, amount);
+            await tx.wait();
+            alert("transferFrom 成功")
+            console.log("Transaction successful");
+        }
+
+
+    </script>
+</body>
+
+</html>
